@@ -1,0 +1,11 @@
+node_modules/
+data/
+dist/
+plugin/*/bin/
+plugin/*/obj/
+WarmupMapVote/bin/
+WarmupMapVote/obj/
+.env
+.env.dev
+servers.json
+servers.dev.json

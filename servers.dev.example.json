@@ -1,0 +1,14 @@
+[
+  {
+    "id": "test",
+    "name": "Testserver (finnes ikke)",
+    "host": "127.0.0.1",
+    "port": 27999,
+    "gotvPort": 27998,
+    "gotvPassword": "change-me",
+    "mode": "wingman",
+    "panelId": "abc12345",
+    "playersPerTeam": 1,
+    "rconPassword": "change-me"
+  }
+]
