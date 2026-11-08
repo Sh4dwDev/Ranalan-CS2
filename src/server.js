@@ -18,6 +18,7 @@ const PUBLIC_FILES = {
   '/style.css': 'text/css; charset=utf-8',
   '/match.js': 'text/javascript; charset=utf-8',
   '/copy.js': 'text/javascript; charset=utf-8',
+  '/admin.js': 'text/javascript; charset=utf-8',
 };
 const publicDir = join(import.meta.dirname, '..', 'public');
 const MAX_BODY = 256 * 1024;
@@ -353,17 +354,21 @@ route('GET', '/admin', async (ctx) => {
     canPower: panelEnabled(server),
     state: await getServerState(server),
   })));
+  const users = store.listUsers();
+  const userNames = new Map(users.map((u) => [u.steam_id, u.name]));
+  const teamNames = store.userTeamNames();
   ctx.html(views.adminPage({
     user: ctx.user,
     serverStates,
     teams: store.listTeams().map((team) => ({
       ...team,
+      captainName: userNames.get(team.captain_id) || '',
       memberCount: store.teamMembers(team.id).length,
       locked: store.teamHasOpenMatch(team.id),
     })),
     servers: config.servers,
-    matches: store.listMatches({ includeTests: true }),
-    users: store.listUsers(),
+    matches: store.listMatches({ includeTests: true, limit: 1000 }),
+    users: users.map((u) => ({ ...u, teamName: teamNames.get(u.steam_id) || '' })),
     flash: ctx.flash,
   }));
 });

@@ -207,42 +207,91 @@ export function adminPage({ user, teams, servers, serverStates = [], matches, us
     ? 'Ingen servere er satt opp ennå. Legg dem til i servers.json.'
     : 'Du trenger minst to lag for å lage en kamp.';
 
-  const matchRows = matches.map((m) => `<div class="row">
+  const serverNames = new Map(servers.map((s) => [s.id, s.name]));
+  const open = (m) => m.status !== 'finished';
+  // Unfinished matches first, newest first within each group.
+  const sortedMatches = [...matches].sort((a, b) => (open(b) - open(a)) || (b.id - a.id));
+  const matchRows = sortedMatches.map((m) => {
+    const groups = [open(m) ? 'open' : 'finished', m.is_test ? 'test' : 'real'].join(' ');
+    return `<div class="row admin-row" data-groups="${groups}"
+        data-search="${esc(`${m.team1_name} ${m.team2_name} ${serverNames.get(m.server_id) || ''} #${m.id}`.toLowerCase())}">
+      <span class="row-id">#${m.id}</span>
       <a class="row-main" href="/matches/${m.id}">${esc(m.team1_name)} <span class="versus-small">VS</span> ${esc(m.team2_name)}</a>
+      <span class="row-meta">${esc(FORMAT_TEXT[m.format])} · ${esc(serverNames.get(m.server_id) || m.server_id)} · ${esc(shortTime(m.created_at))}</span>
       ${m.is_test ? '<span class="badge">Test</span>' : ''}
       <span class="status status-${esc(m.status)}">${esc(STATUS_TEXT[m.status])}</span>
       <form method="post" action="/matches/${m.id}/delete" data-confirm="${esc(DELETE_MATCH_TEXT)}">
         <button class="link danger">Slett</button>
       </form>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
-  const teamRows = teams.map((t) => `<div class="row">
+  const teamRows = teams.map((t) => {
+    const groups = [t.locked ? 'locked' : 'free', t.memberCount === 0 ? 'empty' : ''].join(' ');
+    return `<div class="row admin-row" data-groups="${groups}"
+        data-search="${esc(`${t.name} ${t.captainName}`.toLowerCase())}">
       <a class="row-main" href="/teams/${t.id}">${esc(t.name)}</a>
-      <span class="muted">${t.memberCount} ${t.memberCount === 1 ? 'spiller' : 'spillere'}</span>
+      <span class="row-meta">${t.memberCount} ${t.memberCount === 1 ? 'spiller' : 'spillere'}${t.captainName ? ` · Kaptein: ${esc(t.captainName)}` : ''}</span>
       ${t.locked
-        ? '<span class="muted">Har en kamp som ikke er ferdig</span>'
+        ? '<span class="status status-sent">I kamp</span>'
         : `<form method="post" action="/admin/teams/${t.id}/delete"
             data-confirm="${esc(`Slette ${t.name}? Spillerne mister laget, og lagets ferdige kamper slettes også. Dette kan ikke angres.`)}">
             <button class="link danger">Slett</button>
           </form>`}
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
-  const userRows = users.map((u) => `<div class="row">
+  const userRows = users.map((u) => {
+    const groups = [u.is_admin ? 'admin' : '', u.teamName ? 'team' : 'noteam'].join(' ');
+    return `<div class="row admin-row" data-groups="${groups}"
+        data-search="${esc(`${u.name} ${u.steam_id} ${u.teamName}`.toLowerCase())}">
       ${avatar(u, 'small')}
-      <span class="row-main">${esc(u.name)}</span>
+      <span class="row-main">${esc(u.name)}<small class="row-sub">${esc(u.steam_id)}</small></span>
+      <span class="row-meta">${u.teamName ? esc(u.teamName) : 'Uten lag'}</span>
       ${u.is_admin ? '<span class="badge">Admin</span>' : ''}
-      ${u.steam_id === user.steam_id ? '' : `<form method="post" action="/admin/users">
+      ${u.steam_id === user.steam_id ? '<span class="muted">Deg</span>' : `<form method="post" action="/admin/users">
         <input type="hidden" name="steam_id" value="${esc(u.steam_id)}">
         <input type="hidden" name="admin" value="${u.is_admin ? '0' : '1'}">
         <button class="link ${u.is_admin ? 'danger' : ''}">${u.is_admin ? 'Fjern admin' : 'Gjør til admin'}</button>
       </form>`}
-    </div>`).join('');
+    </div>`;
+  }).join('');
+
+  const openCount = matches.filter(open).length;
+  const runningCount = serverStates.filter((s) => s.state === 'running').length;
+  const stat = (tab, value, label) => `<a class="stat-tile" href="#${tab}" data-tab-link="${tab}">
+      <strong>${value}</strong><span>${label}</span></a>`;
+  const tabs = [
+    ['kamper', 'Kamper', matches.length],
+    ['ny-kamp', 'Ny kamp', null],
+    ['lag', 'Lag', teams.length],
+    ['brukere', 'Brukere', users.length],
+    ['servere', 'Servere', serverStates.length],
+    ['testkamp', 'Testkamp', null],
+  ];
 
   return layout({
     title: 'Admin',
     user,
     flash,
-    body: `<section class="card"><h1>Opprett kamp</h1>
+    body: `<div class="admin">
+    <div class="admin-head">
+      <h1>Admin</h1>
+      <a class="button small" href="#ny-kamp" data-tab-link="ny-kamp">Ny kamp</a>
+    </div>
+    <div class="stat-tiles">
+      ${stat('kamper', openCount, 'Kamper pågår')}
+      ${stat('lag', teams.length, 'Lag')}
+      ${stat('brukere', users.length, 'Brukere')}
+      ${serverStates.length ? stat('servere', `${runningCount}/${serverStates.length}`, 'Servere på') : ''}
+    </div>
+    <nav class="admin-tabs" aria-label="Admin">
+      ${tabs.map(([id, label, count]) => `<a href="#${id}" data-tab-link="${id}">${label}${count === null ? '' : ` <span class="tab-count">${count}</span>`}</a>`).join('')}
+    </nav>
+    ${listSection('kamper', 'Kamper', 'Søk etter lag, server eller kampnummer', [
+      ['open', 'Pågår'], ['finished', 'Ferdige'], ['test', 'Test'], ['all', 'Alle'],
+    ], matchRows, 'Ingen kamper ennå.')}
+    <section class="card admin-panel" id="ny-kamp"><h2>Opprett kamp</h2>
       ${canCreate ? `<form method="post" action="/matches" class="create-match">
         <div class="pick-teams">
           <label>Lag 1 <select name="team1" required>${teamOptions(0)}</select></label>
@@ -263,11 +312,17 @@ export function adminPage({ user, teams, servers, serverStates = [], matches, us
         <p class="muted">Du får en lenke du kan dele med lagene med en gang.</p>
       </form>` : `<p class="muted">${esc(hint)}</p>`}
     </section>
-    ${serverRows ? `<section class="card"><h2>Servere</h2>
+    ${listSection('lag', 'Lag', 'Søk etter lag eller kaptein', [
+      ['all', 'Alle'], ['locked', 'I kamp'], ['empty', 'Uten spillere'],
+    ], teamRows, 'Ingen lag ennå.')}
+    ${listSection('brukere', 'Brukere', 'Søk etter navn, Steam ID eller lag', [
+      ['all', 'Alle'], ['admin', 'Admins'], ['noteam', 'Uten lag'],
+    ], userRows, 'Ingen brukere ennå.')}
+    <section class="card admin-panel" id="servere"><h2>Servere</h2>
       <p class="muted">Serverne starter når en kamp lages og stopper noen minutter etter at de ikke trengs. Start en server her for å bli med uten kamp. Den holdes på i minst en time.</p>
-      ${serverRows}
-    </section>` : ''}
-    <section class="card"><h2>Testkamp</h2>
+      ${serverRows || '<p class="muted">Ingen servere er satt opp ennå.</p>'}
+    </section>
+    <section class="card admin-panel" id="testkamp"><h2>Testkamp</h2>
       <p class="muted">Spill en ekte kamp mot bots på serveren. Du velger kart for begge lag. Testkamper vises ikke på forsiden og teller ikke i statistikken.</p>
       ${servers.length ? `<form method="post" action="/matches/test" class="create-match">
         <label>Spill med <select name="team">
@@ -283,11 +338,36 @@ export function adminPage({ user, teams, servers, serverStates = [], matches, us
         <button class="button secondary big">Lag testkamp</button>
       </form>` : `<p class="muted">${esc(hint)}</p>`}
     </section>
-    <section class="card"><h2>Kamper</h2>${matchRows || '<p class="muted">Ingen kamper ennå.</p>'}</section>
-    <section class="card"><h2>Lag</h2>${teamRows || '<p class="muted">Ingen lag ennå.</p>'}</section>
-    <section class="card"><h2>Brukere</h2>${userRows}</section>`,
-    scripts: '<script src="/copy.js"></script>',
+    </div>`,
+    scripts: '<script src="/copy.js"></script><script src="/admin.js"></script>',
   });
+}
+
+// A searchable list on the Admin page. admin.js does the searching and filtering in the
+// browser; without it, every row is shown.
+function listSection(id, title, placeholder, filters, rows, empty) {
+  return `<section class="card admin-panel" id="${id}" data-list>
+      <h2>${title}</h2>
+      ${rows ? `<div class="list-tools">
+        <input type="search" data-search-input placeholder="${esc(placeholder)}" aria-label="${esc(placeholder)}">
+        <div class="filter-chips" role="group" aria-label="Filter">
+          ${filters.map(([value, label], i) => `<button type="button" class="chip" data-filter="${value}" aria-pressed="${i === 0}">${label}</button>`).join('')}
+        </div>
+      </div>
+      <p class="list-count muted" data-list-count></p>
+      <div class="admin-list">${rows}</div>
+      <p class="muted" data-no-hits hidden>Ingen treff.</p>
+      <button type="button" class="button secondary small" data-show-more hidden>Vis flere</button>`
+    : `<p class="muted">${empty}</p>`}
+    </section>`;
+}
+
+const TIME_FORMAT = new Intl.DateTimeFormat('nb-NO', {
+  day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Oslo',
+});
+
+function shortTime(ms) {
+  return ms ? TIME_FORMAT.format(new Date(ms)) : '';
 }
 
 function teamPanel(number, team, members) {

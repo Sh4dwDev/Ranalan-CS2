@@ -124,6 +124,14 @@ export const listUsers = () => db.prepare(
   `SELECT * FROM users WHERE steam_id NOT LIKE '${TEST_ID_PREFIX}%' ORDER BY name COLLATE NOCASE`,
 ).all();
 
+// Each user's team name, for the Admin page.
+export function userTeamNames() {
+  const rows = db.prepare(
+    'SELECT tm.steam_id, t.name FROM team_members tm JOIN teams t ON t.id = tm.team_id WHERE t.is_test = 0',
+  ).all();
+  return new Map(rows.map((r) => [r.steam_id, r.name]));
+}
+
 export function setAdmin(steamId, isAdmin) {
   db.prepare('UPDATE users SET is_admin = ? WHERE steam_id = ?').run(isAdmin ? 1 : 0, steamId);
 }
@@ -245,14 +253,14 @@ export function getMatch(id) {
   return match;
 }
 
-export function listMatches({ includeTests = false } = {}) {
+export function listMatches({ includeTests = false, limit = 30 } = {}) {
   return db.prepare(`
     SELECT m.id, m.format, m.status, m.created_at, m.server_id, m.is_test,
            t1.name AS team1_name, t2.name AS team2_name
     FROM matches m JOIN teams t1 ON t1.id = m.team1_id JOIN teams t2 ON t2.id = m.team2_id
     ${includeTests ? '' : 'WHERE m.is_test = 0'}
-    ORDER BY m.id DESC LIMIT 30
-  `).all();
+    ORDER BY m.id DESC LIMIT ?
+  `).all(limit);
 }
 
 export function vetoActions(matchId) {

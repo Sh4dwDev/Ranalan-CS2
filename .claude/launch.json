@@ -6,6 +6,12 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["--env-file-if-exists=.env.dev", "src/server.js"],
       "port": 3000
+    },
+    {
+      "name": "ranalan-admin-demo",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["--env-file-if-exists=.env.dev", ".claude/admin-demo.mjs"],
+      "port": 3001
     }
   ]
 }

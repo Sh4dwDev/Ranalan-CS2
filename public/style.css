@@ -547,6 +547,67 @@ table.stats .strong { font-weight: 800; color: var(--accent-2); }
 
 .watch-title { margin-top: 20px; }
 
+/* Admin page */
+main:has(.admin) { max-width: 1100px; }
+.admin-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.admin .stat-tiles { margin-bottom: 16px; }
+a.stat-tile { text-decoration: none; color: var(--text); border: 1px solid transparent; transition: border-color 0.12s; }
+a.stat-tile:hover { border-color: var(--border); }
+.admin-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  margin-bottom: 16px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.admin-tabs a {
+  flex: none;
+  padding: 8px 14px;
+  border-radius: 7px;
+  color: var(--muted);
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.admin-tabs a:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
+.admin-tabs a[aria-current="page"] { color: var(--accent-text); background: var(--accent); }
+.tab-count { font-size: 0.78rem; opacity: 0.75; margin-left: 2px; }
+/* The tabs only work with admin.js, so without it every section shows and the tab bar jumps to them. */
+body:not(.admin-tabs-on) .admin-tabs a[aria-current] { color: var(--muted); }
+
+.list-tools { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 6px; }
+.list-tools input { flex: 1 1 260px; width: auto; }
+.filter-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip {
+  background: var(--bg);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.chip:hover { color: var(--text); }
+.chip[aria-pressed="true"] { color: var(--accent-2); border-color: rgba(255, 157, 46, 0.6); background: rgba(255, 157, 46, 0.12); }
+.list-count { font-size: 0.85rem; margin: 0 0 4px; }
+.admin-list { margin-bottom: 8px; }
+.admin-list .row { border-top: 1px solid var(--border); }
+.admin-list .row:hover { background: rgba(255, 255, 255, 0.03); }
+.admin-row .row-main { text-decoration: none; color: var(--text); }
+.admin-row a.row-main:hover { color: var(--accent-2); }
+.row-id { color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; min-width: 3ch; }
+.row-meta { color: var(--muted); font-size: 0.88rem; }
+.row-sub { display: block; color: var(--muted); font-weight: 400; font-size: 0.78rem; font-variant-numeric: tabular-nums; }
+.admin-panel[hidden], .admin-row[hidden] { display: none; }
+
 .button.danger-text { color: var(--danger); }
 
 main:has(.match-layout) { max-width: 1240px; }
