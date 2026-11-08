@@ -256,11 +256,25 @@ export function getMatch(id) {
 export function listMatches({ includeTests = false, limit = 30 } = {}) {
   return db.prepare(`
     SELECT m.id, m.format, m.status, m.created_at, m.server_id, m.is_test,
+           m.team1_id, m.team2_id, m.team1_series, m.team2_series, m.winner,
            t1.name AS team1_name, t2.name AS team2_name
     FROM matches m JOIN teams t1 ON t1.id = m.team1_id JOIN teams t2 ON t2.id = m.team2_id
     ${includeTests ? '' : 'WHERE m.is_test = 0'}
     ORDER BY m.id DESC LIMIT ?
   `).all(limit);
+}
+
+// The unfinished match a player should hear about: their team's, or a test match they made.
+export function openMatchIdForUser(steamId) {
+  const row = db.prepare(`
+    SELECT m.id FROM matches m
+    WHERE m.status != 'finished' AND (
+      (m.is_test = 0 AND (SELECT team_id FROM team_members WHERE steam_id = ?) IN (m.team1_id, m.team2_id))
+      OR (m.is_test = 1 AND m.created_by = ?)
+    )
+    ORDER BY m.id DESC LIMIT 1
+  `).get(steamId, steamId);
+  return row?.id ?? null;
 }
 
 export function vetoActions(matchId) {

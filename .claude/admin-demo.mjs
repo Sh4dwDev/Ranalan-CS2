@@ -29,7 +29,20 @@ for (let m = 0; m < 70; m++) {
     team1Id: teamIds[m % 40], team2Id: teamIds[(m + 7) % 40], format: m % 3 ? 'bo1' : 'bo3',
     server: servers[m % servers.length], firstTeam: 1, isTest: m % 9 === 0,
   });
-  if (m < 64) store.setMatchStatus(id, 'finished');
+  if (m < 64) store.finishSeries(id, m % 2 ? 2 : 1, m % 2 ? 0 : 2, m % 2 ? 'team1' : 'team2');
+  else if (m >= 67) {
+    // Some live matches, with a map score and stats.
+    store.setMatchStatus(id, 'sent');
+    store.saveMapScore(id, 0, 5 + m - 67, 3, null);
+    for (let p = 0; p < 2; p++) {
+      store.savePlayerStats(id, 0, 1, {
+        steamId: `7656119900000${String(m + p).padStart(4, '0')}`, name: `Spiller ${m + p}`,
+        kills: 10 + m - 60 + p, deaths: 6, assists: 2, headshotKills: 4, damage: 900, roundsPlayed: 9, mvp: 1,
+      });
+    }
+  }
 }
+// The demo login (Spiller 1) captains the first team. Its match waits for the vote.
+store.createMatch({ team1Id: teamIds[0], team2Id: teamIds[39], format: 'bo3', server: servers[0], firstTeam: 1 });
 
 await import('../src/server.js');

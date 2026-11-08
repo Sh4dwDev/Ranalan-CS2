@@ -19,6 +19,7 @@ const PUBLIC_FILES = {
   '/match.js': 'text/javascript; charset=utf-8',
   '/copy.js': 'text/javascript; charset=utf-8',
   '/admin.js': 'text/javascript; charset=utf-8',
+  '/notice.js': 'text/javascript; charset=utf-8',
 };
 const publicDir = join(import.meta.dirname, '..', 'public');
 const MAX_BODY = 256 * 1024;
@@ -218,12 +219,102 @@ route('GET', '/dev-login', (ctx) => {
 // Pages
 
 route('GET', '/', (ctx) => {
+  const team = ctx.user ? store.getUserTeam(ctx.user.steam_id) : null;
+  const matches = store.listMatches({ limit: 60 });
+  // Live matches show the score of the map being played and the series so far.
+  const live = matches.filter((m) => m.status !== 'finished').map((m) => {
+    const maps = store.matchMaps(m.id);
+    const current = maps.findLast((map) => !map.winner) || null;
+    return {
+      ...m,
+      mapScore: current ? [current.team1_score, current.team2_score] : null,
+      seriesScore: [maps.filter((x) => x.winner === 'team1').length, maps.filter((x) => x.winner === 'team2').length],
+    };
+  });
   ctx.html(views.homePage({
     user: ctx.user,
-    team: ctx.user ? store.getUserTeam(ctx.user.steam_id) : null,
-    matches: store.listMatches(),
+    team,
+    members: team ? store.teamMembers(team.id) : [],
+    notice: playerNotice(ctx.user),
+    live,
+    results: matches.filter((m) => m.status === 'finished').slice(0, 8),
+    topPlayers: store.leaderboard().slice(0, 5),
     flash: ctx.flash,
   }));
+});
+
+const ACTION_TEXT = { ban: 'fjerne et kart', pick: 'velge et kart', side: 'velge side' };
+
+// What a player should know about their own match right now, shown on every page.
+// `key` changes when something new needs their attention, which is when the page alerts them;
+// `alert: false` notices are only shown.
+function playerNotice(user) {
+  if (!user) return null;
+  const matchId = store.openMatchIdForUser(user.steam_id);
+  if (!matchId) return null;
+  const match = store.getMatch(matchId);
+  const info = describeMatch(match, user);
+  const team1 = store.getTeam(match.team1_id);
+  const team2 = store.getTeam(match.team2_id);
+  const ownTeam = store.getUserTeam(user.steam_id);
+  const opponent = ownTeam?.id === team1.id ? team2.name : ownTeam?.id === team2.id ? team1.name : null;
+  const base = {
+    matchId,
+    href: `/matches/${matchId}`,
+    teams: `${team1.name} vs ${team2.name}`,
+    connect: null,
+  };
+  const vs = opponent ? `mot ${opponent}` : '';
+
+  if (match.status === 'veto') {
+    if (info.yourTurn) {
+      const step = store.vetoActions(matchId).length;
+      return {
+        ...base, kind: 'turn', alert: true, key: `${matchId}:turn:${step}`,
+        title: 'Din tur i kartvalget',
+        text: `Du skal ${ACTION_TEXT[info.current.action]}.`,
+        button: 'Velg nå',
+      };
+    }
+    return {
+      ...base, kind: 'veto', alert: true, key: `${matchId}:veto`,
+      title: `Kampen din ${vs} er klar for kartvalg`.replace('  ', ' '),
+      text: info.current ? `${info.current.teamName} skal ${ACTION_TEXT[info.current.action]}.` : 'Kartvalget pågår.',
+      button: 'Se kartvalget',
+    };
+  }
+  if (match.status === 'sending') {
+    return {
+      ...base, kind: 'sending', alert: false, key: `${matchId}:sending`,
+      title: 'Kampen sendes til serveren', text: 'Det tar noen sekunder.', button: 'Åpne kampen',
+    };
+  }
+  if (match.status === 'send_failed') {
+    return {
+      ...base, kind: 'failed', alert: false, key: `${matchId}:failed`,
+      title: 'Kampen kom ikke frem til serveren', text: 'Si fra til en admin.', button: 'Åpne kampen',
+    };
+  }
+  if (match.status === 'sent' || match.status === 'test_ready') {
+    if (store.matchMaps(matchId).length) {
+      return {
+        ...base, kind: 'live', alert: false, key: `${matchId}:live`,
+        title: 'Kampen din pågår', text: base.teams, button: 'Se kampen',
+      };
+    }
+    return {
+      ...base, kind: 'connect', alert: true, key: `${matchId}:connect`,
+      title: 'Kampen starter. Koble til nå!',
+      text: 'Bli med på serveren og skriv .ready i chatten.',
+      button: 'Åpne kampen',
+      connect: info.connect,
+    };
+  }
+  return null;
+}
+
+route('GET', '/api/notice', (ctx) => {
+  ctx.json({ notice: playerNotice(ctx.user) });
 });
 
 route('GET', '/teams', (ctx) => {

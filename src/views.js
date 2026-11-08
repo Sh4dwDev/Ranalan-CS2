@@ -46,35 +46,71 @@ export function layout({ title, user, body, flash, scripts = '' }) {
   <a class="brand" href="/">RANALAN</a>
   <nav>${nav}</nav>
 </header>
+${user ? '<div class="notice-slot" id="notice-slot" aria-live="polite"></div>' : ''}
 <main>
 ${flash ? `<p class="flash">${esc(flash)}</p>` : ''}
 ${body}
 </main>
+${user ? '<script src="/notice.js"></script>' : ''}
 ${scripts}
 </body>
 </html>`;
 }
 
-function matchRow(m) {
-  return `<a class="row" href="/matches/${m.id}">
-    <span class="row-main">${esc(m.team1_name)} <span class="versus-small">VS</span> ${esc(m.team2_name)}</span>
-    <span class="muted">${esc(FORMAT_TEXT[m.format])}</span>
-    <span class="status status-${esc(m.status)}">${esc(STATUS_TEXT[m.status])}</span>
-  </a>`;
+function liveCard(m) {
+  const score = m.mapScore
+    ? `<span class="live-score">${m.mapScore[0]}<span>:</span>${m.mapScore[1]}</span>`
+    : '<span class="versus-small">VS</span>';
+  const series = m.format === 'bo3' && (m.seriesScore[0] || m.seriesScore[1])
+    ? `<span class="muted">Kart ${m.seriesScore[0]}–${m.seriesScore[1]}</span>` : '';
+  return `<a class="live-card" href="/matches/${m.id}">
+      <span class="live-top">
+        <span class="status status-${esc(m.status)}">${m.mapScore ? 'Pågår' : esc(STATUS_TEXT[m.status])}</span>
+        <span class="muted">${esc(FORMAT_TEXT[m.format])}</span>
+      </span>
+      <span class="live-teams">
+        <span class="live-team">${esc(m.team1_name)}</span>
+        ${score}
+        <span class="live-team right">${esc(m.team2_name)}</span>
+      </span>
+      ${series}
+    </a>`;
 }
 
-export function homePage({ user, team, matches, flash }) {
+function resultRow(m) {
+  const won = (team) => (m.winner === team ? ' won' : '');
+  const score = m.team1_series === null ? '–' : `${m.team1_series}–${m.team2_series}`;
+  return `<a class="result-row" href="/matches/${m.id}">
+      <span class="result-team${won('team1')}">${esc(m.team1_name)}</span>
+      <span class="result-score">${score}</span>
+      <span class="result-team right${won('team2')}">${esc(m.team2_name)}</span>
+    </a>`;
+}
+
+export function homePage({ user, team, members = [], notice, live, results, topPlayers, flash }) {
   const hero = `<section class="hero">
+    <p class="hero-kicker">CS2 LAN</p>
     <h1>Kartvalg uten kaos.</h1>
-    <p>Logg inn med Steam, bli med på laget ditt, og velg kart med noen få klikk.</p>
+    <p>Logg inn med Steam, bli med på laget ditt, og velg kart med noen få klikk. Du får beskjed her når kampen din er klar.</p>
     <a class="button" href="/auth/steam">Logg inn med Steam</a>
   </section>`;
 
+  // The player's own match, big and first. The notice bar says the same on every page.
+  const myMatch = notice ? `<a class="my-match my-match-${esc(notice.kind)}" href="${esc(notice.href)}" data-key="${esc(notice.key)}">
+      <span class="my-match-label">Din kamp</span>
+      <strong>${esc(notice.title)}</strong>
+      <span class="muted">${esc(notice.teams)} · ${esc(notice.text)}</span>
+      <span class="button small">${esc(notice.button)}</span>
+    </a>` : '';
+
   const teamCard = !user ? '' : team
-    ? `<section class="card"><h2>Laget ditt</h2>
-        <a class="row" href="/teams/${team.id}"><span class="row-main">${esc(team.name)}</span><span class="muted">Åpne</span></a>
+    ? `<section class="card team-card"><h2>Laget ditt</h2>
+        <a class="team-card-name" href="/teams/${team.id}">${esc(team.name)}</a>
+        <div class="team-card-members">
+          ${members.map((m) => `<span class="member" title="${esc(m.name)}">${avatar(m, 'small')}<span>${esc(m.name)}</span></span>`).join('')}
+        </div>
       </section>`
-    : `<section class="card"><h2>Du er ikke på et lag</h2>
+    : `<section class="card team-card"><h2>Du er ikke på et lag</h2>
         <p class="muted">Lag et nytt lag her, eller bruk invitasjonslenken fra kapteinen din.</p>
         <form method="post" action="/teams" class="inline">
           <input name="name" maxlength="32" required placeholder="Lagnavn" aria-label="Lagnavn">
@@ -82,14 +118,33 @@ export function homePage({ user, team, matches, flash }) {
         </form>
       </section>`;
 
+  const top = topPlayers.length ? `<section class="card"><h2>Toppspillere</h2>
+      ${topPlayers.map((p, i) => `<a class="top-row" href="/players/${esc(p.steam_id)}">
+          <span class="top-rank">${i + 1}</span>
+          ${avatar(p, 'small')}
+          <span class="row-main">${esc(p.name)}</span>
+          <span class="muted">${p.kills} kills</span>
+        </a>`).join('')}
+      <a class="link" href="/stats">All statistikk</a>
+    </section>` : '';
+
   return layout({
     title: 'Hjem',
     user,
     flash,
-    body: `${user ? '' : hero}${teamCard}
-      <section class="card"><h2>Kamper</h2>
-        ${matches.length ? matches.map(matchRow).join('') : '<p class="muted">Ingen kamper ennå.</p>'}
-      </section>`,
+    body: `${user ? `<div class="home-head"><h1>Hei, ${esc(user.name)}</h1></div>` : hero}
+      ${myMatch}
+      <div class="home-grid">
+        <div class="home-main">
+          <section class="card"><h2>Kamper nå</h2>
+            ${live.length ? `<div class="live-grid">${live.map(liveCard).join('')}</div>` : '<p class="muted">Ingen kamper akkurat nå.</p>'}
+          </section>
+          <section class="card"><h2>Siste resultater</h2>
+            ${results.length ? results.map(resultRow).join('') : '<p class="muted">Ingen ferdige kamper ennå.</p>'}
+          </section>
+        </div>
+        <div class="home-side">${teamCard}${top}</div>
+      </div>`,
   });
 }
 
